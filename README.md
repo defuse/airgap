@@ -1,12 +1,18 @@
 Airgap
 =======
 
-This document presents the design of, and procedures surrounding, an air-gapped
-system. We aim to provide a minimal set of useful functionality, with minimal
-security assumptions.
+This document presents the design of, and procedures surrounding, a practical
+and affordable air-gap system. We aim to provide a minimal set of useful
+functionality, with minimal security assumptions.
 
-Goals
-------
+**Important Note:** We are *not* trying to design something that's NSA-proof.
+Rather, the goal is to be *secure enough that a targeted physical attack is
+necessary*.  We should strive to make the NSA's job as hard as possible
+(expensive with lots of detection risk), but we should not overcomplicate things
+trying to protect ourselves from an adversary as powerful as the NSA.
+
+Features
+---------
 
 We want an air-gapped system that can perform the following tasks securely:
 
@@ -20,15 +26,22 @@ We want an air-gapped system that can perform the following tasks securely:
   system) to a public key that was provided from the outside, possibly in
   response to a message they decrypted.
 
-- Backup locally to an offsite (but secure) location.
+- Backup the air-gap system locally to an off-site secure location.
 
 Security Assumptions
 ---------------------
 
 This section should be an *exhaustive* list of all the things that need to be
-assumed for this air-gap design to be secure. They should also be *reasonable*,
-i.e. not assuming unrealistic things. Unreasonable/impossible assumptions are
-considered vulnerabilities in the design.
+assumed for this air-gap design to be secure. The assumptions should be
+*reasonable*, i.e. not assuming unrealistic things. Unreasonable/impossible
+assumptions are considered vulnerabilities in the design.
+
+We should, as much as possible, avoid assuming code is secure.
+
+### Kerckhoff's Principle
+
+- We assume the adversary knows everything about how the air-gap works (i.e.
+  they have this document).
 
 ### Physical Access
 
@@ -64,6 +77,14 @@ considered vulnerabilities in the design.
 - The above side channel points also hold for the air-gap system's
   "surrounding environement", e.g. the adversary cannot hear the user typing.
 
+- Things that move into and out of the side-channel-protected area are not
+  themselves side channels. For example, we assume that the person using the
+  AirGap is not wearing a recording device that records the sound of them
+  typing, to be retrieved by the adversary after they leave the
+  side-channel-protected zone. Another example, we assume the adversary does not
+  have a microscopic flying robot that hides in your lungs, flys out, records
+  your typing, then flys back into your lungs.
+
 ### Electronic Compromise (Malware Capabilities)
 
 - The adversary cannot maintain a compromise across a Tails reboot. That is, if
@@ -79,6 +100,8 @@ considered vulnerabilities in the design.
   CD from a DVD-R [2], the adversary cannot compromise the Tails environment.
   **Note: Governments can probably do this.** Is there a way to remove this
   assumption? What about using a raspberry pi?
+
+- TODO: Add assumptions about code being secure from the primitives.
 
 System Design (Physical)
 -------------------------
@@ -109,6 +132,8 @@ AirGap consists of the following components:
 
 - Four 16GB USB flash drives.
 
+- Hardware Cryptographic (True) Random Number Generator
+
 ### GapProxy
 
 - A desktop PC or laptop that can boot from CD. This does not need to be
@@ -131,7 +156,10 @@ System Design (Policy)
 
 The previous section describes the hardware we need. This section explains how
 to use it. To do this, we define "primitives" that are used to construct the
-desired functionality (see the Goals section).
+desired functionality (see the Features section).
+
+**TODO: We haven't said anything about encryption, or what to do when a physical
+compromise is detected!!**
 
 ### Primitives
 
@@ -200,7 +228,7 @@ desired functionality (see the Goals section).
 
     TODO: need to explain what the USB sticks are for first.
 
-### Performing Goals
+### Performing Features
 
 Here we explain how each Goal can be met by using the primitives.
 
