@@ -327,6 +327,12 @@ not plugging the USB into anythign else.
 
 #### Preventing Accidental Misuse
 
+Detecting Attacks
+------------------
+
+Responding to Attacks
+----------------------
+
 Notes
 ------
 
