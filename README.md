@@ -38,7 +38,7 @@ assumptions are considered vulnerabilities in the design.
 
 We should, as much as possible, avoid assuming code is secure.
 
-### Kerckhoff's Principle
+### Kerckhoffs's Principle
 
 - We assume the adversary knows everything about how the air-gap works (i.e.
   they have this document).
@@ -49,7 +49,7 @@ We should, as much as possible, avoid assuming code is secure.
   adversary has not modified it to insert a backdoor, or even to make side
   channels easier to exploit.
 
-- The adversary does not have physical accesss to the air-gapped system while it
+- The adversary does not have physical access to the air-gapped system while it
   is powered on.
 
 - If the adversary gains physical access to the air-gapped system while it is
@@ -75,7 +75,7 @@ We should, as much as possible, avoid assuming code is secure.
   enough detail to perform side channels.
 
 - The above side channel points also hold for the air-gap system's
-  "surrounding environement", e.g. the adversary cannot hear the user typing.
+  "surrounding environment", e.g. the adversary cannot hear the user typing.
 
 - Things that move into and out of the side-channel-protected area are not
   themselves side channels. For example, we assume that the person using the
@@ -98,8 +98,6 @@ We should, as much as possible, avoid assuming code is secure.
   adversary root access (but *not* physical access) to a computer running any
   operating system, then completely power off the system, then boot a Tails Live
   CD from a DVD-R [2], the adversary cannot compromise the Tails environment.
-  **Note: Governments can probably do this.** Is there a way to remove this
-  assumption? What about using a raspberry pi?
 
 - TODO: Add assumptions about code being secure from the primitives.
 
@@ -116,6 +114,9 @@ We need to give these systems names. The air-gap system will be called AirGap,
 and the internet-connected Tails-booting system will be called GapProxy. We will
 also need to give a name to a special flash drive called TransferMedia.
 
+We will also suppose there is only one human operator of the airgap, which we
+will refer to by the name HumanOperator.
+
 ### AirGap
 
 AirGap consists of the following components:
@@ -130,9 +131,11 @@ AirGap consists of the following components:
 
 - A clean copy of Tails burned to a DVD-R disc.
 
-- Four 16GB USB flash drives.
+- Four 16GB USB flash drives. We give these names: Store1, Backup1, Offsite1,
+  Offsite2.
 
-- Hardware Cryptographic (True) Random Number Generator
+- Hardware Cryptographic (True) Random Number Generator [4]. Later, we'll refer
+  to this device (or collection of devices) by the name HWRNG.
 
 ### GapProxy
 
@@ -156,30 +159,48 @@ System Design (Policy)
 
 The previous section describes the hardware we need. This section explains how
 to use it. To do this, we define "primitives" that are used to construct the
-desired functionality (see the Features section).
+desired functionality (listed in the Features section).
+
+The instructions are written in a code-like format for HumanOperator to follow.
 
 **TODO: We haven't said anything about encryption, or what to do when a physical
 compromise is detected!!**
 
 ### Primitives
 
-#### Primitive "RX(url)": Transfer File from Internet to AirGap.
+#### Primitive "SystemSetup()": Set up the system so other things can be done.
+
+    ---------------------------------------------------------------------------
+    Preconditions: 
+        - The hardware listed in the System Design (Physical) section is
+          available.
+    Postconditions:
+        - The air-gap system is configured so that the primitives and actions in
+          the following sections can be performed.
+    ---------------------------------------------------------------------------
+
+    Place AirGap in a secure location.
+    Boot AirGap to Tails.
+    Permanently plug HWRNG into AirGap and ensure that it is working.
+    Insert Store1, Backup1, Offsite1, Offsite2, and TransferMedia.
+    Using `dd`, zero Store1, Backup1, Offsite1, Offsite2, and TransferMedia.
+    Set up full disk encryption on Store1, Backup1, Offsite1, and Offsite2 using
+        a password that only HumanOperator knows.
+    Write 1KB from /dev/urandom to a Randomness file on Store1.
+    Clone Store1's filesystem to Backup1's, Offsite1's, and Offsite2's.
+    Unplug all flash drives.
+    Power off AirGap.
+
+    Send Offsite1 to Location X.
+
+    TODO: add the explicit RNG read steps to the other shit
+
+#### Primitive "RECV(url)": Transfer File from Internet to AirGap.
 
     ---------------------------------------------------------------------------
     Input: A URL with the file to transfer to AirGap.
     Result: AirGap is running and the file from the url is available.
     ---------------------------------------------------------------------------
-    
-    Boot GapProxy to Tails.
-    Insert TransferMedia into GapProxy.
-    Overwrite TransferMedia completely with zero bytes.
-    Remove TransferMedia from GapProxy.
-    Power off GapProxy.
-    
-    // This step is necessary in case Tails will for some reason load malware
-    // off of TransferMedia if it contains a certain byte pattern.
-    Use special dedicated hardware to verify that TransferMedia is completely
-    zero bytes.
     
     // TODO: there are assumptions in here like following this process doesn't lead
     to compromise, i.e. you can download files safely
@@ -194,13 +215,15 @@ compromise is detected!!**
     Power off GapProxy.
     
     Boot AirGap to Tails.
+    Insert and mount Store1 and Backup1.
+    LocalBackup()
     Insert TransferMedia into AirGap.
     Mount the storage USB drive. // TODO: clarification
     // Use the written-down file size for the following step:
     Use `dd` to transfer the file onto the storage USB drive.
     Remove TransferMedia from AirGap.
 
-#### Primitive "TX(file)": Transfer File from AirGap to Internet.
+#### Primitive "SEND(file)": Transfer File from AirGap to Internet.
 
     ---------------------------------------------------------------------------
     Input: AirGap is running and a file is available.
@@ -211,6 +234,7 @@ compromise is detected!!**
     Use `dd` to write the file to TransferMedia.
     Write down the exact file size on a peice of paper.
     Remove TransferMedia from AirGap.
+    Remove all flash drives.
     Power off AirGap.
 
     Boot GapProxy to Tails.
@@ -222,11 +246,24 @@ compromise is detected!!**
 
 #### Primitive "OffsiteBackup()": Backup AirGap to Location X.
 
-    TODO: need to explain what the USB sticks are for first.
+    TODO: pre/post
+    Boot AirGap to Tails.
+    Insert and mount Store1 and Backup1.
+    If Offsite1 is at Location X
+        Insert and mount Offsite2.
+        Clone the files on Store1 to Offsite2.
+        Send Offsite2 to Location X.
+        Retrieve Offsite1 from Location X.
+    Else
+        Do the same as above, but swap Offsite1 and Offsite2.
+    End
+    Remove all flash drives from AirGap.
+    Power off AirGap.
 
 #### Primitive "LocalBackup()": Backup AirGap locally.
 
-    TODO: need to explain what the USB sticks are for first.
+    TODO: pre/post
+    Clone the files on Store1 to Backup1.
 
 ### Performing Features
 
@@ -236,12 +273,13 @@ Here we explain how each Goal can be met by using the primitives.
 
     TODO: add pre/post
 
-    RX(url)
+    RECV(url)
     Examine the file.
     If you want to sign the file:
         Sign the file.
-        TX(signature file)
+        SEND(signature file)
     Else
+        Remove all flash drives.
         Power off AirGap.
     EndIf
 
@@ -249,9 +287,10 @@ Here we explain how each Goal can be met by using the primitives.
 
     TODO: add pre/post
 
-    RX(url)
+    RECV(url)
     Decrypt the file. // TODO: how to do this safely, ascii-only?
     View the file.
+    Remove all flash drives.
     Power off AirGap.
 
     // If they want to EncryptPGPMessage() next, do they really have to power
@@ -261,24 +300,32 @@ Here we explain how each Goal can be met by using the primitives.
 
     TODO: add pre/post
 
-    // Before doing this, if you need to, use RX() to get the public key, then
+    // Before doing this, if you need to, use RECV() to get the public key, then
     // verify the fingerprints.
     Boot AirGap to Tails.
+    Insert and mount Store1 and Backup1.
+    LocalBackup()
     Type the message and save it to a file (keep it in non-volatile media).
     Encrypt and sign the file with GPG. // TODO: details?
-    TX(the encrypted file).
+    SEND(the encrypted file).
 
 #### Goal Backup(): Backup the system.
 
-- Perform `LocalBackup()` every time the system is used. **Needs clarification**.
+- LocalBackup() is run every time after AirGap boots, so that the files on
+  Backup1 are synced to the files on Store1, being at most one use behind.
 
-- Perform `OffsiteBackup()` at least every 30 days or after the system is used
-  (whichever comes later). **Needs clarification**.
+- OffsiteBackup() should be performed at least once every 30 days, so that the
+  flash drive stored in Location X (either Offsite1 or Offsite2) is synced with
+  Store1, at most 30 days behind.
 
 ### Extra Conditions
 
 TODO: put things that should hold for all time here (i.e. not procedure), like
 not plugging the USB into anythign else.
+
+#### No Executable Code on Store1, Backup1, Offsite1, or Offsite2
+
+#### Preventing Accidental Misuse
 
 Notes
 ------
@@ -292,3 +339,10 @@ Notes
 [3]: We've already assumed the adversary can't receive these signals even if
      AirGap did have these things, but having this requirement makes that
      assumption much easier to satisfy in practice.
+
+[4]: Note that this can, and should, be more than one device. There should
+     always be at least two independent sources of entropy. Not only because it
+     prevents one's backdoor from being exploitable (if only one of the two are
+     backdoored), but it reduces the chance of accidental failure. A webcam can
+     be used as a secondary randomness source. Just pipe the video stream into
+     /dev/random.
