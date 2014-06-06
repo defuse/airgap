@@ -17,16 +17,20 @@ Features
 We want an air-gapped system that can perform the following tasks securely:
 
 - Let the operator examine [1] a file provided from the outside, and after
-  reviewing it, sign it with a private key.
+  reviewing it, sign it with a PGP private key.
 
-- Let the operator decrypt ASCII text messages that were encrypted to their
-  public key.
+- Let the operator decrypt text messages that were encrypted to their public
+  key.
 
-- Let the operator encrypt and sign ASCII text messages (typed in to the air-gap
+- Let the operator encrypt and sign text messages (typed in to the air-gap
   system) to a public key that was provided from the outside, possibly in
   response to a message they decrypted.
 
-- Backup the air-gap system locally to an off-site secure location.
+- Backup the air-gap system locally and to an off-site secure location.
+
+We plan to add more functionality later. However, every added feature increases
+the attack surface. The operator should understand this, and should use as few
+features as possible.
 
 Security Assumptions
 ---------------------
@@ -99,6 +103,26 @@ We should, as much as possible, avoid assuming code is secure.
   operating system, then completely power off the system, then boot a Tails Live
   CD from a DVD-R [2], the adversary cannot compromise the Tails environment.
 
+- Suppose the adversary can write arbitrary data to a flash drive (we suppose
+  they *can not* physically modify the drive), then plug it in to a system
+  running Tails. This should not give the adversary access to the Tails
+  environment.
+
+- A physical True Random Number Generator (TRNG) is available, working, and is
+  not compromised by the adversary.
+
+- The adversary cannot exploit Tails even if they can:
+
+    - Give arbitrary input files to the `dd` program.
+    - Have an arbitrary file downloaded from the Internet using the operator's
+      choice of download tool (e.g. wget).
+    - Subject an arbitrary file to the operator's evaluation when considering
+      signing the file. For example, if the operator needs to unzip a file to
+      evaluate it for signing, the adversary should not be able to exploit
+      a vulnerability in the `unzip` program.
+    - Have the operator open arbitrary files in their text editor of choice.
+    - Pass arbitrary files to be decrypted and encrypted to the `gpg` program.
+
 - TODO: Add assumptions about code being secure from the primitives.
 
 System Design (Physical)
@@ -163,9 +187,6 @@ desired functionality (listed in the Features section).
 
 The instructions are written in a code-like format for HumanOperator to follow.
 
-**TODO: We haven't said anything about encryption, or what to do when a physical
-compromise is detected!!**
-
 ### Primitives
 
 #### Primitive "SystemSetup()": Set up the system so other things can be done.
@@ -186,30 +207,30 @@ compromise is detected!!**
     Using `dd`, zero Store1, Backup1, Offsite1, Offsite2, and TransferMedia.
     Set up full disk encryption on Store1, Backup1, Offsite1, and Offsite2 using
         a password that only HumanOperator knows.
-    Write 1KB from /dev/urandom to a Randomness file on Store1.
+    Use GnuPG to generate a key pair and store the private key it on Store1.
+    Write down the public key fingerprint on a physical piece of paper.
     Clone Store1's filesystem to Backup1's, Offsite1's, and Offsite2's.
-    Unplug all flash drives.
+    Remove all flash drives from AirGap.
     Power off AirGap.
 
     Send Offsite1 to Location X.
 
-    TODO: add the explicit RNG read steps to the other shit
-
 #### Primitive "RECV(url)": Transfer File from Internet to AirGap.
 
     ---------------------------------------------------------------------------
-    Input: A URL with the file to transfer to AirGap.
-    Result: AirGap is running and the file from the url is available.
+    Preconditions:
+        - The SystemSetup() has been performed.
+        - The file to be transferred is available from the public Internet, at
+          the URL 'url'.
+        - GapProxy is powered off.
+        - AirGap is powered off and no flash drives are plugged in.
+    Postconditions:
+        - The file at 'url' has been written to the filesystem on Store1.
     ---------------------------------------------------------------------------
-    
-    // TODO: there are assumptions in here like following this process doesn't lead
-    to compromise, i.e. you can download files safely
     
     Boot GapProxy to Tails.
     Retrieve the file from 'url'.
-    // Don't bother with filesystems, just write it to the beginning of the
-    // device.
-    Use `dd` to write the file to TransferMedia.
+    Use `dd` to write the file directly to TransferMedia.
     Write down the exact file size on a physical piece of paper.
     Remove TransferMedia from GapProxy.
     Power off GapProxy.
@@ -218,98 +239,168 @@ compromise is detected!!**
     Insert and mount Store1 and Backup1.
     LocalBackup()
     Insert TransferMedia into AirGap.
-    Mount the storage USB drive. // TODO: clarification
-    // Use the written-down file size for the following step:
-    Use `dd` to transfer the file onto the storage USB drive.
+    Use `dd` and the written-down size to transfer the file to Store1.
     Remove TransferMedia from AirGap.
+    Remove all flash drives from AirGap.
+    Power off AirGap.
 
 #### Primitive "SEND(file)": Transfer File from AirGap to Internet.
 
     ---------------------------------------------------------------------------
-    Input: AirGap is running and a file is available.
-    Result: A URL on the public Internet where that file can be downloaded.
+    Preconditions:
+        - The SystemSetup() has been performed.
+        - The file to be uploaded is available as 'file' on Store1.
+        - GapProxy is powered off.
+        - AirGap is powered off and no flash drives are plugged in.
+    Postconditions:
+        - The file is available for download from some URL on the Internet.
     ---------------------------------------------------------------------------
     
+    Boot AirGap to Tails.
+    Insert and mount Store1 and Backup1.
+    LocalBackup()
     Insert TransferMedia into AirGap.
     Use `dd` to write the file to TransferMedia.
-    Write down the exact file size on a peice of paper.
+    Write down the exact file size on a piece of paper.
     Remove TransferMedia from AirGap.
-    Remove all flash drives.
+    Remove all flash drives from AirGap.
     Power off AirGap.
 
     Boot GapProxy to Tails.
-    Use `dd` and the written-down size to get the file.
-    Upload the file to any website.
+    Use `dd` and the written-down size to obtain the file from TransferMedia.
+    Upload the file to the Internet and obtain the URL.
     Write down the URL where the file can be downloaded.
-    Remove TransferMedia from AirGap.
+    Remove TransferMedia from GapProxy.
     Power off GapProxy.
 
 #### Primitive "OffsiteBackup()": Backup AirGap to Location X.
 
-    TODO: pre/post
+    ---------------------------------------------------------------------------
+    Preconditions:
+        - The SystemSetup() has been performed.
+        - AirGap is powered off and no flash drives are plugged in.
+    Postconditions:
+        - The current contents of Store1 are replicated to Location X.
+    ---------------------------------------------------------------------------
+    
     Boot AirGap to Tails.
     Insert and mount Store1 and Backup1.
     If Offsite1 is at Location X
         Insert and mount Offsite2.
-        Clone the files on Store1 to Offsite2.
+        Copy files on Store1 to Offsite2 so that they have identical contents.
+        // The order of these steps is important so that there's no SPOF.
         Send Offsite2 to Location X.
         Retrieve Offsite1 from Location X.
     Else
-        Do the same as above, but swap Offsite1 and Offsite2.
+        Do the same as above, but with Offsite2 instead of Offsite1.
     End
     Remove all flash drives from AirGap.
     Power off AirGap.
 
 #### Primitive "LocalBackup()": Backup AirGap locally.
 
-    TODO: pre/post
-    Clone the files on Store1 to Backup1.
+    ---------------------------------------------------------------------------
+    Preconditions:
+        - The SystemSetup() has been performed.
+        - AirGap is powered on and Store1 and Backup1 are mounted.
+    Postconditions:
+        - Store1 and Backup1 have identical contents.
+    ---------------------------------------------------------------------------
+
+    Copy files on Store1 to Backup1 so that they have identical contents.
 
 ### Performing Features
 
 Here we explain how each Goal can be met by using the primitives.
 
-#### Goal ExamineAndSignFile(url): Examine a file on the Internet then sign it.
+In this section, we explain how each feature listed in the Features section can
+be performed using the primitives we defined in the last section.
 
-    TODO: add pre/post
+Note: If the steps are followed to the letter, there is a lot of unnecessary
+rebooting involved. If the operator is careful, they can eliminate these
+unnecessary reboots (use common sense).
 
-    RECV(url)
-    Examine the file.
-    If you want to sign the file:
-        Sign the file.
-        SEND(signature file)
-    Else
-        Remove all flash drives.
-        Power off AirGap.
-    EndIf
+#### Feature ExamineAndSignFile(url): Examine a file on the Internet then sign it.
 
-#### Goal DecryptPGPMessage(url): Decrypt an ASCII PGP message from the Internet.
+    ---------------------------------------------------------------------------
+    Preconditions:
+        - The SystemSetup() has been performed.
+        - AirGap is powered off and no flash drives are plugged in.
+        - RECV()'s preconditions are met.
+    Postconditions:
+        - The operator has reviewed the file at 'url' and, if they chose to, has
+          uploaded a signature of that file to the Internet, available through
+          some URL.
+    ---------------------------------------------------------------------------
 
-    TODO: add pre/post
+    RECV(url) to a 'file' on Store1.
 
-    RECV(url)
-    Decrypt the file. // TODO: how to do this safely, ascii-only?
-    View the file.
-    Remove all flash drives.
-    Power off AirGap.
-
-    // If they want to EncryptPGPMessage() next, do they really have to power
-    // off here? I don't think it can be useful, but maybe...
-
-#### Goal EncryptPGPMessage(): Let the operator encrypt and sign a message.
-
-    TODO: add pre/post
-
-    // Before doing this, if you need to, use RECV() to get the public key, then
-    // verify the fingerprints.
     Boot AirGap to Tails.
     Insert and mount Store1 and Backup1.
     LocalBackup()
-    Type the message and save it to a file (keep it in non-volatile media).
-    Encrypt and sign the file with GPG. // TODO: details?
+    // Make sure to examine 'file' safely!
+    HumanOperator should now examine 'file' and decide if they want to sign it.
+    If HumanOperator wants to sign 'file'
+        Sign 'file' with GnuPG.
+        Remove all flash drives from AirGap.
+        Power off AirGap.
+        SEND(the signed file)
+    Else
+        Remove all flash drives from AirGap.
+        Power off AirGap.
+    EndIf
+
+#### Feature DecryptPGPMessage(url): Decrypt an PGP message from the Internet.
+
+    ---------------------------------------------------------------------------
+    Preconditions:
+        - The SystemSetup() has been performed.
+        - AirGap is powered off and no flash drives are plugged in.
+        - RECV()'s preconditions are met.
+    Postconditions:
+        - The the file at 'url' has been decrypted and stored on Store1.
+        - The operator is able to view the decrypted file's contents.
+    ---------------------------------------------------------------------------
+
+    // NOTE: The public key of the file sender should be first obtained with
+    // RECV, and the fingerprint should be verified.
+
+    RECV(url) to 'file' on Store1.
+
+    Boot AirGap to Tails.
+    Insert and mount Store1 and Backup1.
+    LocalBackup()
+    Decrypt and verify the signature of 'file' with GnuPG.
+    Optionally, view the file with a text editor.
+    Remove all flash drives from AirGap.
+    Power off AirGap.
+
+#### Feature EncryptPGPMessage(): Let the operator encrypt and sign a message.
+
+    ---------------------------------------------------------------------------
+    Preconditions:
+        - The SystemSetup() has been performed.
+        - AirGap is powered off and no flash drives are plugged in.
+    Postconditions:
+        - The operator has composed their message and saved it on Store1.
+        - The message ciphertext, encrypted to its recipient, is available for
+          download from some Internet URL.
+    ---------------------------------------------------------------------------
+
+    // NOTE: The public key of the message recipient should first be obtained
+    // with RECV, and the fingerprint should be verified.
+
+    Boot AirGap to Tails.
+    Insert and mount Store1 and Backup1.
+    LocalBackup()
+    Type the message and save it to a file on Store1.
+    Encrypt and sign the file with GnuPG.
+    Remove all flash drives from AirGap.
+    Power off AirGap.
+
     SEND(the encrypted file).
 
-#### Goal Backup(): Backup the system.
+#### Feature: Back up the system.
 
 - LocalBackup() is run every time after AirGap boots, so that the files on
   Backup1 are synced to the files on Store1, being at most one use behind.
@@ -318,20 +409,73 @@ Here we explain how each Goal can be met by using the primitives.
   flash drive stored in Location X (either Offsite1 or Offsite2) is synced with
   Store1, at most 30 days behind.
 
-### Extra Conditions
+### Declarative Policies
 
-TODO: put things that should hold for all time here (i.e. not procedure), like
-not plugging the USB into anythign else.
+This section contains extra bits of policy that are declarative, and apply for
+all time, unlike the procedural policy in the previous section.
 
-#### No Executable Code on Store1, Backup1, Offsite1, or Offsite2
+#### No Re-Use of Hardware
+
+Every piece of hardware that touches AirGap should never be used with any other
+system again. For example, AirGap's keyboard should never be used with another
+computer. The *only* exception to this rule is the TransferMedia flash drive.
 
 #### Preventing Accidental Misuse
+
+Precautions should be in place to prevent accidental misuse. Note that these
+precautions are not intended to be robust, they are only intended to be
+informative. They are to make it very obvious when the operator, or someone else
+granted access to the air-gap area, is doing something wrong. They are not
+intended to stop attacks.
+
+- Keep AirGap and all peripherals stored in a locked container when powered off.
+  This prevents accidental misuse/repurposing of the hardware.
+
+- When transporting Offsite1 and Offsite2 to and from Location X, as well as
+  while they are stored at Location X, they should be in a locked container
+  whose only keys are kept with the AirGap hardware.
+
+- Place warning signs explaining what the AirGap hardware is and why none of its
+  components should be re-purposed.
+
+- Place instruction signs, or an instruction manual, for the operator to follow
+  in case they forget any of the procedures defined above.
+
+- AirGap's BIOS should be configured to never boot from a flash drive. As
+  a secondary precaution, all flash drives should be removed when booting
+  AirGap.
+
+#### No Execution from Store1, Backup1, Offsite1, or Offsite2
+
+At no point should any data on Store1, Backup1, Offsite1, or Offsite2 be
+executed. The term "executed" is broad, so it is up to the operator to choose
+a conservative definition. The following things should be explicitly *not*
+allowed:
+
+- Executing binary code.
+- Executing shell scripts or scripting language scripts.
+- Viewing documents whose viewers execute macros.
+- Copying and pasting commands that are stored in a text file.
+- Manually following *any kind* of instructions stored in a text file.
+
+#### Decommissioning
+
+When the system is decommissioned, all components should be physically
+destroyed. This is not only to destroy traces of secret data, it also ensures
+that once the system is decommissioned, it is never re-commissioned into another
+air-gap system, after potentially being compromised while decommissioned.
 
 Detecting Attacks
 ------------------
 
 Responding to Attacks
 ----------------------
+
+Restoring Backups
+------------------
+
+Conclusion
+-----------
 
 Notes
 ------
