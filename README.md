@@ -123,7 +123,8 @@ We should, as much as possible, avoid assuming code is secure.
     - Have the operator open arbitrary files in their text editor of choice.
     - Pass arbitrary files to be decrypted and encrypted to the `gpg` program.
 
-- TODO: Add assumptions about code being secure from the primitives.
+- TODO: Carefully check these assumptions against what happens in the primitives
+  and features.
 
 System Design (Physical)
 -------------------------
@@ -420,6 +421,11 @@ Every piece of hardware that touches AirGap should never be used with any other
 system again. For example, AirGap's keyboard should never be used with another
 computer. The *only* exception to this rule is the TransferMedia flash drive.
 
+#### Keep AirGap Powered Off
+
+AirGap should never be powered on for a period longer than one hour, and it must
+be attended by the operator for the entire time it is powered on.
+
 #### Preventing Accidental Misuse
 
 Precautions should be in place to prevent accidental misuse. Note that these
@@ -465,17 +471,63 @@ destroyed. This is not only to destroy traces of secret data, it also ensures
 that once the system is decommissioned, it is never re-commissioned into another
 air-gap system, after potentially being compromised while decommissioned.
 
-Detecting Attacks
-------------------
-
-Responding to Attacks
-----------------------
-
 Restoring Backups
 ------------------
 
+This document described how to *create* backups of the air-gap system. We have
+yet to describe how to *restore* these backups. The restore process is as
+follows:
+
+    ---------------------------------------------------------------------------
+    Preconditions:
+        - AirGap is powered off and no flash drives are plugged in.
+            (Note, if one of the offsite backups is being used, it might be the
+             case that all of AirGap's hardware is new. That's ok, as long as
+             SystemSetup() has been performed on the new hardware.).
+        - Store1 is broken.
+        - One of Backup1, Offsite1, and Offsite2 contain the most recent backup.
+    Postconditions:
+        - Store1 is replaced by a new drive.
+        - The old Store1 is decommissioned.
+        - The new Store1 contains the restored backup.
+    ---------------------------------------------------------------------------
+
+    Boot AirGap to Tails.
+    Insert and mount Store1 (new) and the backup flash drive.
+    Copy the backup onto Store1 (new).
+    Remove all flash drives from AirGap.
+    Power off AirGap.
+
+    Decommission the old Store1.
+
+Even though backups are created frequently, data loss is still possible.
+Sometimes, losing data can create other security issues, or can create
+situations that require a special response. It is up to the operator to identify
+these cases and respond appropriately.
+
+Detecting and Responding to Attacks
+------------------------------------
+
+This document describes a system that should be 100% secure as long as the
+security assumptions are met. If it is possible to compromise the system without
+violating one of the security assumptions, then this document is flawed.
+
+In practice, however, the security assumptions *will* be violated, and the
+system *will* be compromised. It is therefore important to try to detect these
+violations, and then respond in a way that protects the integrity of the system.
+It is not always possible to detect a violation, and sometimes there is no good
+response to a violation. However, a "best effort" at detection and response
+should be made.
+
+The details of detection and response are out of scope of this document.
+
 Conclusion
 -----------
+
+Audit Status
+-------------
+
+This document has not yet received any third-party review.
 
 Notes
 ------
