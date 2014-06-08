@@ -5,6 +5,16 @@ This document presents the design of, and procedures surrounding, a practical
 and affordable air-gap system. We aim to provide a minimal set of useful
 functionality, with minimal security assumptions.
 
+The target audience is technically proficient people who could benefit from an
+air-gap system, but currently are not doing so because they either don't know
+how or because they think it's too expensive. Examples of such people are
+software developers (who want to sign their code), security consultants (who
+want to sign the copy of the software they audited), and journalists who want to
+accept material from sources securely. People with extremely high risk, such as
+those being targeted by government agencies, must realize that, for them, there
+is no "one size fits all" defense, and that while they may use this document as
+a starting point, they must proceed with much more caution.
+
 **Important Note:** We are *not* trying to design something that's NSA-proof.
 Rather, the goal is to be *secure enough that a targeted physical attack is
 necessary*.  We should strive to make the NSA's job as hard as possible
@@ -16,7 +26,7 @@ Features
 
 We want an air-gapped system that can perform the following tasks securely:
 
-- Let the operator examine [1] a file provided from the outside, and after
+- Let the operator examine a file provided from the outside, and after
   reviewing it, sign it with a PGP private key.
 
 - Let the operator decrypt text messages that were encrypted to their public
@@ -28,19 +38,32 @@ We want an air-gapped system that can perform the following tasks securely:
 
 - Backup the air-gap system locally and to an off-site secure location.
 
-We plan to add more functionality later. However, every added feature increases
-the attack surface. The operator should understand this, and should use as few
-features as possible.
+More functionality can be added at the operator's discretion. However, anything
+more than this is out of scope of this document and may require considerable
+design and policy changes.
 
 Security Assumptions
 ---------------------
 
 This section should be an *exhaustive* list of all the things that need to be
 assumed for this air-gap design to be secure. The assumptions should be
-*reasonable*, i.e. not assuming unrealistic things. Unreasonable/impossible
+*reasonable*, i.e. not assuming unrealistic things. Unreasonable or conflicting
 assumptions are considered vulnerabilities in the design.
 
 We should, as much as possible, avoid assuming code is secure.
+
+If you are implementing the proposed design, it is *your responsibility* to
+ensure that these assumptions or satisfied against the class of adversaries that
+you want to defend against. This document *does not* tell you what to do to
+satisfy these assumptions. It *assumes* they are satisfied, and tells you how to
+be secure under these assumptions.
+
+If these assumptions are satisfied, the proposed design should be secure. The
+converse -- that if the assumptions are not satisfied, then the proposed design
+is not secure -- is not necessarily true. Given what is assumed here, it is
+possible to have security without needing an air-gap at all. The air-gap
+provides an additional safety margin, so that the adversary (sometimes) has to
+contradict more than one of the assumptions in order to compromise the system.
 
 ### Kerckhoffs's Principle
 
@@ -49,8 +72,8 @@ We should, as much as possible, avoid assuming code is secure.
 
 ### Physical Access
 
-- The hardware used for the air-gap system is (initially) trustworthy. The
-  adversary has not modified it to insert a backdoor, or even to make side
+- The hardware used for the air-gap system is (at least initially) trustworthy.
+  The adversary has not modified it to insert a backdoor, or even to make side
   channels easier to exploit.
 
 - The adversary does not have physical access to the air-gapped system while it
@@ -59,54 +82,35 @@ We should, as much as possible, avoid assuming code is secure.
 - If the adversary gains physical access to the air-gapped system while it is
   powered off, their access will be detected and can be acted upon.
 
-- There are at least two such locations where these assumptions hold. In other
-  words, the air-gap system is at one location, and there is a distinct
-  "Location X" that also satisfies these properties, with the additional
-  assumption that transport to and from this location satisfies these
-  properties.
+- There are at least two locations where these assumptions hold. In other words,
+  the air-gap system is at one location, and there is a distinct "Location X"
+  that also satisfies these properties, with the additional assumption that
+  transportation to and from this location is secure.
 
 ### Side Channels
 
-- The adversary does not have detailed enough access to the air-gapped system's
-  power usage to perform side channel analysis. (Question: Can we eliminate this
-  assumption by having the air-gap system run off a UPS that isn't plugged in
-  whenever it's powered on?).
-
-- The adversary cannot measure electromagnetic radiation coming from the air-gap
-  system with enough detail to perform side channels.
-
-- The adversary cannot measure acoustic emanations from the air-gap system with
-  enough detail to perform side channels.
-
-- The above side channel points also hold for the air-gap system's
-  "surrounding environment", e.g. the adversary cannot hear the user typing.
+- The adversary cannot measure acoustic emanations, electromagnetic radiation,
+  or the power fluctuations coming from the air-gapped system, or its
+  surrounding environment, with enough accuracy to perform side-channel attacks.
 
 - Things that move into and out of the side-channel-protected area are not
   themselves side channels. For example, we assume that the person using the
-  AirGap is not wearing a recording device that records the sound of them
+  AirGap is not wearing a recording device that records the sound of themselves
   typing, to be retrieved by the adversary after they leave the
-  side-channel-protected zone. Another example, we assume the adversary does not
-  have a microscopic flying robot that hides in your lungs, flys out, records
-  your typing, then flys back into your lungs.
+  side-channel-protected zone. 
+
+- TODO: GapProxy has its own set of assumptions. Add those here.
 
 ### Electronic Compromise (Malware Capabilities)
-
-- The adversary cannot maintain a compromise across a Tails reboot. That is, if
-  we boot Tails from a DVD-R, give the adversary root access for a while, then
-  power the system off (completely), then boot back into Tails, the adversary
-  will no longer have useful access to the system (they should not be able to
-  see or modify what we're doing in Tails). This excludes things like BIOS
-  viruses, or viruses that hide in other hardware components.
 
 - The adversary cannot compromise a Tails boot. That is, if we give the
   adversary root access (but *not* physical access) to a computer running any
   operating system, then completely power off the system, then boot a Tails Live
-  CD from a DVD-R [2], the adversary cannot compromise the Tails environment.
+  CD from a DVD-R [1], the adversary cannot compromise the Tails environment.
 
 - Suppose the adversary can write arbitrary data to a flash drive (we suppose
   they *can not* physically modify the drive), then plug it in to a system
-  running Tails. This should not give the adversary access to the Tails
-  environment.
+  running Tails. This should not give them access to the Tails environment.
 
 - A physical True Random Number Generator (TRNG) is available, working, and is
   not compromised by the adversary.
@@ -132,8 +136,8 @@ System Design (Physical)
 The proposed design actually needs two computer systems. First, the system that
 will actually be air-gapped. Second, an internet connected system that can boot
 a Tails Live CD. The purpose of the second system is, when booted into Tails, to
-provide an "adversary-free" environment for preparing and storing the data to be
-sent and received from the air-gap system.
+provide an "adversary-free" environment for preparing the data to be sent to the
+air-gapped system, and for receiving data from the air-gapped system.
 
 We need to give these systems names. The air-gap system will be called AirGap,
 and the internet-connected Tails-booting system will be called GapProxy. We will
@@ -147,33 +151,36 @@ will refer to by the name HumanOperator.
 AirGap consists of the following components:
 
 - A desktop PC that that has no WiFi or Bluetooth capability, no speakers,
-  and no microphone [3], with the hard drive removed, and the BIOS set to only
-  boot from a CD.
+  and no microphone [2], with the hard drive removed, and the BIOS set to only
+  boot from a DVD-R.
 
 - A keyboard dedicated to this system.
 
 - A mouse dedicated to this system.
 
-- A clean copy of Tails burned to a DVD-R disc.
+- A clean copy of Tails burned to a DVD-R (*not* DVD-RW) disc. **TODO:**
+  Find out if DVD-R is really unwritable, maybe you can "OR" to it with a DVD-RW
+  drive, in which case you could still modify code.... is that possible?
 
 - Four 16GB USB flash drives. We give these names: Store1, Backup1, Offsite1,
   Offsite2.
 
-- Hardware Cryptographic (True) Random Number Generator [4]. Later, we'll refer
+- Hardware Cryptographic (True) Random Number Generator [3]. Later, we'll refer
   to this device (or collection of devices) by the name HWRNG.
 
 ### GapProxy
 
-- A desktop PC or laptop that can boot from CD. This does not need to be
+- A desktop PC or laptop that can boot from DVD-R. This does not need to be
   a dedicated system. It could be the user's regular PC, for example, as long as
   all of the assumptions above (especially the Physical Access ones) hold for it
-  as well.
+  as well. **TODO:** Instead of making this assumption here, it should be
+  written explicitly in the Security Assumptions section.
 
 - A clean copy of Tails burned to a DVD-R disc.
 
 - Any other peripherals (mouse keyboard, external drives, speakers, etc.) that
   happen to be plugged into it, as long as they are trustworthy and don't
-  violate any of the security assumptions.
+  violate any of the security assumptions. If feasible, unplug everything.
 
 ### TransferMedia
 
@@ -206,9 +213,11 @@ The instructions are written in a code-like format for HumanOperator to follow.
     Permanently plug HWRNG into AirGap and ensure that it is working.
     Insert Store1, Backup1, Offsite1, Offsite2, and TransferMedia.
     Using `dd`, zero Store1, Backup1, Offsite1, Offsite2, and TransferMedia.
+    // TODO: encrypted drives should be urandom'd, not zeroed.
     Set up full disk encryption on Store1, Backup1, Offsite1, and Offsite2 using
-        a password that only HumanOperator knows.
-    Use GnuPG to generate a key pair and store the private key it on Store1.
+        a 128-bit equivalent passphrase that only HumanOperator knows.
+    // TODO: The private key must be protected with a passphrase
+    Use GnuPG to generate a key pair and store the private key on Store1.
     Write down the public key fingerprint on a physical piece of paper.
     Clone Store1's filesystem to Backup1's, Offsite1's, and Offsite2's.
     Remove all flash drives from AirGap.
@@ -294,7 +303,7 @@ The instructions are written in a code-like format for HumanOperator to follow.
         Retrieve Offsite1 from Location X.
     Else
         Do the same as above, but with Offsite2 instead of Offsite1.
-    End
+    EndIf
     Remove all flash drives from AirGap.
     Power off AirGap.
 
@@ -310,6 +319,10 @@ The instructions are written in a code-like format for HumanOperator to follow.
 
     Copy files on Store1 to Backup1 so that they have identical contents.
 
+    **TODO** Backups are write-frequently, read-almost-never. So full-disk
+    encryption is not the best way to encrypt them. There should at least be
+    some integrity checking... maybe encrypt them with GPG?
+
 ### Performing Features
 
 Here we explain how each Goal can be met by using the primitives.
@@ -319,7 +332,9 @@ be performed using the primitives we defined in the last section.
 
 Note: If the steps are followed to the letter, there is a lot of unnecessary
 rebooting involved. If the operator is careful, they can eliminate these
-unnecessary reboots (use common sense).
+unnecessary reboots (use common sense). **TODO:** It might actually be useful to
+keep these reboots in, e.g. so that the private key is never decrypted while the
+TransferMedia is plugged in... think about this more.
 
 #### Feature ExamineAndSignFile(url): Examine a file on the Internet then sign it.
 
@@ -428,6 +443,10 @@ be attended by the operator for the entire time it is powered on.
 
 #### Preventing Accidental Misuse
 
+**TODO:** These points might be useful to *some* implementations, but could be
+harmful to others. Either remove these points or designate them as "only things
+you should do if your situation is similar to mine".
+
 Precautions should be in place to prevent accidental misuse. Note that these
 precautions are not intended to be robust, they are only intended to be
 informative. They are to make it very obvious when the operator, or someone else
@@ -448,19 +467,21 @@ intended to stop attacks.
   in case they forget any of the procedures defined above.
 
 - AirGap's BIOS should be configured to never boot from a flash drive. As
-  a secondary precaution, all flash drives should be removed when booting
+  a secondary precaution, all flash drives should be removed before booting
   AirGap.
 
 #### No Execution from Store1, Backup1, Offsite1, or Offsite2
 
 At no point should any data on Store1, Backup1, Offsite1, or Offsite2 be
 executed. The term "executed" is broad, so it is up to the operator to choose
-a conservative definition. The following things should be explicitly *not*
-allowed:
+a sufficiently conservative definition.
+
+The following things should be explicitly disallowed:
 
 - Executing binary code.
 - Executing shell scripts or scripting language scripts.
-- Viewing documents whose viewers execute macros.
+- Viewing documents whose viewers execute macros or are likely to contain
+  exploitable vulnerabilities (e.g. PDF viewers).
 - Copying and pasting commands that are stored in a text file.
 - Manually following *any kind* of instructions stored in a text file.
 
@@ -474,7 +495,7 @@ air-gap system, after potentially being compromised while decommissioned.
 Restoring Backups
 ------------------
 
-This document described how to *create* backups of the air-gap system. We have
+So far, we have described how to *create* backups of the air-gap system. We have
 yet to describe how to *restore* these backups. The restore process is as
 follows:
 
@@ -532,19 +553,17 @@ This document has not yet received any third-party review.
 Notes
 ------
 
-[1]: Where the process of examination is assumed to maintain system integrety
-     even though the file being examined may be malicious.
-
-[2]: We should also assume that the Tails CD was in the drive when the adversary
+[1]: We should also assume that the Tails CD was in the drive when the adversary
      had root access, and that that drive is capable of burning DVD+/-RW discs.
 
-[3]: We've already assumed the adversary can't receive these signals even if
+[2]: We've already assumed the adversary can't receive these signals even if
      AirGap did have these things, but having this requirement makes that
      assumption much easier to satisfy in practice.
 
-[4]: Note that this can, and should, be more than one device. There should
+[3]: Note that this can, and should, be more than one device. There should
      always be at least two independent sources of entropy. Not only because it
      prevents one's backdoor from being exploitable (if only one of the two are
      backdoored), but it reduces the chance of accidental failure. A webcam can
      be used as a secondary randomness source. Just pipe the video stream into
-     /dev/random.
+     /dev/random. A cautious operator should add entropy manually (dice rolls,
+     coin flips, etc.).
