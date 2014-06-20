@@ -1,3 +1,9 @@
+WARNING
+========
+
+**I'm still writing this guide. There are probably *serious* mistakes. Do not
+implement it until it has had some more review.**
+
 Airgap
 =======
 
