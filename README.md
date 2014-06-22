@@ -436,6 +436,13 @@ TransferMedia is plugged in... think about this more.
 This section contains extra bits of policy that are declarative, and apply for
 all time, unlike the procedural policy in the previous section.
 
+### Passwords
+
+- TODO: Don't reuse passwords, either memorize or (worse) write them down (or
+  a bit of both). Figure out where to keep the passwords (e.g. the offsite
+  passwords can probably be kept physically with the airgap? -- actually, no,
+  because then it'd still be easier to decrypt them than the main one)
+
 #### No Re-Use of Hardware
 
 Every piece of hardware that touches AirGap should never be used with any other
@@ -573,3 +580,11 @@ Notes
      be used as a secondary randomness source. Just pipe the video stream into
      /dev/random. A cautious operator should add entropy manually (dice rolls,
      coin flips, etc.).
+
+TODOs
+-------
+
+- In practice I screwed up by copying the plaintext (reply.txt) instead of the
+  ciphertext (reply.txt.asc), which leaked the contents of my message. There
+  needs to be some kind of policy, or technical measure, or something, to make
+  this less likely.
